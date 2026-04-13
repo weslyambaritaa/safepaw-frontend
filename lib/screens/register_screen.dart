@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Tambahkan ini untuk deteksi Web
+import 'package:image_picker/image_picker.dart';
 import '../utils/app_colors.dart';
-import '../services/auth_service.dart'; // Pastikan path ini sesuai dengan lokasi file AuthService Anda
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,18 +13,16 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // 1. Inisialisasi Controller untuk menangkap teks input
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // 2. Status pilihan role
   String _selectedRole = 'owner';
-
-  // 3. Status loading untuk mencegah klik tombol berkali-kali
   bool _isLoading = false;
 
-  // 4. Praktik Terbaik: Selalu bersihkan controller saat halaman dihancurkan
+  // UBAH: Gunakan XFile dari image_picker agar aman di Web
+  XFile? _ktpFile;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -30,48 +31,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  // Fungsi untuk memproses pendaftaran
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _ktpFile = pickedFile; // Simpan sebagai XFile
+      });
+    }
+  }
+
   Future<void> _handleRegister() async {
-    // Validasi sederhana agar form tidak kosong
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Semua kolom harus diisi!')),
-      );
+    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Semua kolom teks harus diisi!')));
       return;
     }
 
-    setState(() {
-      _isLoading = true; // Nyalakan animasi loading
-    });
+    if (_selectedRole == 'sitter' && _ktpFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sitter wajib mengunggah foto KTP untuk verifikasi.')));
+      return;
+    }
 
-    // Panggil API ke backend Golang
+    setState(() => _isLoading = true);
+
     bool success = await AuthService.register(
       _nameController.text,
       _emailController.text,
       _passwordController.text,
       _selectedRole,
+      ktpFile: _ktpFile, // Kirim XFile
     );
 
-    setState(() {
-      _isLoading = false; // Matikan animasi loading
-    });
+    setState(() => _isLoading = false);
 
     if (success) {
-      // Jika server membalas 201 Created
-      if (mounted) { // Pengecekan mounted wajib jika menggunakan context setelah await
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pendaftaran Berhasil! Silakan Login.')),
-        );
-        Navigator.pop(context); // Kembali ke halaman Login
-      }
-    } else {
-      // Jika gagal (misal: email sudah dipakai)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pendaftaran Gagal. Email mungkin sudah ada atau format salah.')),
+          SnackBar(
+            content: Text(_selectedRole == 'sitter'
+                ? 'Pendaftaran Berhasil! Menunggu verifikasi Admin.'
+                : 'Pendaftaran Berhasil! Silakan Login.'),
+          ),
         );
+        Navigator.pop(context);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pendaftaran Gagal. Format salah atau Error Server.')));
       }
     }
   }
@@ -94,76 +101,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Buat Akun Baru',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
+              const Text('Buat Akun Baru', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               const SizedBox(height: 8),
-              const Text(
-                'Bergabunglah dengan komunitas SafePaw',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
+              const Text('Bergabunglah dengan komunitas SafePaw', style: TextStyle(color: AppColors.textSecondary)),
               const SizedBox(height: 32),
 
-              // TextField Nama Lengkap
               TextField(
-                controller: _nameController, // Pasang controller di sini
-                decoration: InputDecoration(
-                  hintText: 'Nama Lengkap',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                ),
+                controller: _nameController,
+                decoration: InputDecoration(hintText: 'Nama Lengkap', filled: true, fillColor: AppColors.surface, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20)),
               ),
               const SizedBox(height: 16),
 
-              // TextField Email
               TextField(
-                controller: _emailController, // Pasang controller di sini
-                keyboardType: TextInputType.emailAddress, // Mengubah keyboard ke format email
-                decoration: InputDecoration(
-                  hintText: 'Email',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                ),
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(hintText: 'Email', filled: true, fillColor: AppColors.surface, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20)),
               ),
               const SizedBox(height: 16),
 
-              // TextField Password
               TextField(
-                controller: _passwordController, // Pasang controller di sini
+                controller: _passwordController,
                 obscureText: true,
-                decoration: InputDecoration(
-                  hintText: 'Password',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                ),
+                decoration: InputDecoration(hintText: 'Password', filled: true, fillColor: AppColors.surface, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20)),
               ),
               const SizedBox(height: 24),
 
-              // Pilihan Role (Owner / Sitter)
-              const Text(
-                'Daftar sebagai:',
-                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              ),
+              const Text('Daftar sebagai:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -174,11 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       groupValue: _selectedRole,
                       contentPadding: EdgeInsets.zero,
                       activeColor: AppColors.primary,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedRole = value!;
-                        });
-                      },
+                      onChanged: (value) => setState(() => _selectedRole = value!),
                     ),
                   ),
                   Expanded(
@@ -188,40 +147,71 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       groupValue: _selectedRole,
                       contentPadding: EdgeInsets.zero,
                       activeColor: AppColors.primary,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedRole = value!;
-                        });
-                      },
+                      onChanged: (value) => setState(() => _selectedRole = value!),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // AREA FORM KTP
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: _selectedRole == 'sitter' ? 160 : 0,
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text('Verifikasi Identitas (Wajib)', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5, strokeAlign: BorderSide.strokeAlignInside),
+                          ),
+                          child: _ktpFile == null
+                              ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.badge_outlined, size: 40, color: AppColors.primary.withOpacity(0.6)),
+                              const SizedBox(height: 8),
+                              Text('Tap untuk unggah foto KTP', style: TextStyle(color: AppColors.primary.withOpacity(0.8), fontSize: 14)),
+                            ],
+                          )
+                              : ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // UBAH: Logika tampilan Lintas Platform
+                                kIsWeb
+                                    ? Image.network(_ktpFile!.path, fit: BoxFit.cover)
+                                    : Image.file(File(_ktpFile!.path), fit: BoxFit.cover),
+
+                                Container(color: Colors.black26),
+                                const Center(child: Text('Ganti Foto', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 32),
 
-              // Tombol Daftar
               ElevatedButton(
-                onPressed: _isLoading ? null : _handleRegister, // Matikan tombol jika sedang loading
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                // Ubah tampilan tombol jika sedang loading
+                onPressed: _isLoading ? null : _handleRegister,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
                 child: _isLoading
-                    ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                )
-                    : const Text(
-                  'Daftar',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Daftar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 24),
             ],

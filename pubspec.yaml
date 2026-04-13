@@ -34,7 +34,7 @@ dependencies:
   web_socket_channel: ^3.0.3 # Untuk fitur lelang Real-Time
   shared_preferences: ^2.2.2 # Untuk menyimpan Token JWT secara lokal
   provider: ^6.1.2          # (Opsional) Untuk State Management, bisa diganti GetX/Riverpod
-
+  image_picker: ^1.1.2
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
